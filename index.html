@@ -50,6 +50,7 @@
     <button class="tab active" data-tab="home" role="tab">메인</button>
     <button class="tab" data-tab="main" role="tab">이슈 TOP</button>
     <button class="tab" data-tab="demo" role="tab">연령 · 성별</button>
+    <button class="tab" data-tab="trend" role="tab">주간 흐름</button>
   </nav>
 </header>
 
@@ -75,10 +76,14 @@
           <span class="badge badge-new">신규 탐지</span> 신규 진입
         </div>
       </div>
+      <div class="filter-row cat-filters" id="catFilters">
+        <span class="filter-label">분야</span>
+        <button class="chip active" data-cat="">전체</button>
+      </div>
       <div class="table-scroll">
         <table class="tbl" id="topicTable">
           <thead><tr>
-            <th class="col-rank">순위</th><th>주제</th><th>핵심 키워드</th>
+            <th class="col-rank">순위</th><th>분야</th><th>주제</th><th>핵심 키워드</th>
             <th class="num">기사수</th><th class="num">총 댓글수</th><th>대표 기사</th>
           </tr></thead>
           <tbody></tbody>
@@ -144,10 +149,27 @@
     </div>
   </section>
 
+  <!-- ============================== 주간 흐름 -->
+  <section id="tab-trend" class="tab-panel">
+    <div class="card">
+      <div class="card-head"><h3>일자별 여론 활동량</h3>
+        <p class="card-desc">아카이브에 쌓인 날짜의 총 댓글 수입니다. 막대를 누르면 그 날짜로 이동합니다.</p></div>
+      <div id="volChart" class="vol-chart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>연속 추적 이슈</h3>
+        <p class="card-desc">여러 날에 걸쳐 반복 등장한 주제입니다. 며칠째 이어지는지, 언제 정점을 찍었는지 보여줍니다.</p></div>
+      <div id="streaks"></div>
+    </div>
+  </section>
+
   <footer class="footnotes">
     <p>※ 네이버 뉴스 ‘댓글 많은 뉴스’ · ‘많이 본 뉴스’ 언론사별 랭킹을 매일 오전 8시에 수집해 집계합니다.</p>
     <p>※ 성별 · 연령 분포는 네이버 뉴스 댓글 작성자 통계 기준이며, 댓글 100개 이상 기사만 집계 대상입니다.</p>
-    <p>※ 주제 분류는 기사 제목 키워드 동시출현 기반 자동 분류로, 실제 맥락과 다소 차이가 있을 수 있습니다.</p>
+    <p>※ 주제 묶음은 기사 제목의 키워드 동시출현으로 만들고, 주제명·핵심 키워드·브리핑은 기사 제목을 읽은 AI가 맥락을 파악해 작성합니다. 자동 분석이므로 실제 맥락과 차이가 있을 수 있으니, 인용 전 대표 기사를 확인해 주세요.</p>
+    <p>※ 분야(정치·경제·사회·국제·문화)는 그 주제에 대한 여론의 관심이 어디에 쏠려 있는지를 기준으로 분류합니다.</p>
+    <p>※ ‘연속 추적 이슈’는 주제명의 희소 단어를 기준으로 여러 날의 주제를 같은 사안으로 묶은 것입니다. 표현이 크게 달라진 날은 누락될 수 있습니다.</p>
     <p>※ 댓글 수는 수집 시점 기준이며, 조회수 절대치는 제공되지 않아 랭킹 순위만 반영합니다.</p>
     <p class="credit">데일리 이슈 레이더 — 오늘, 여론은 어디를 향했나</p>
   </footer>

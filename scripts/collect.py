@@ -183,6 +183,37 @@ def tokenize(title):
     return tokens
 
 
+CATEGORIES = ["정치", "경제", "사회", "국제", "문화"]
+
+CATEGORY_HINTS = {
+    "정치": ["대통령", "의원", "국회", "민주당", "국힘", "여당", "야당", "전당대회",
+             "경선", "당대표", "장관", "청와대", "정부", "개헌", "총선", "지지율",
+             "탄핵", "특검", "검찰", "공천", "내각", "국정", "정치", "표결", "법안"],
+    "경제": ["부동산", "집값", "공급", "대출", "전세", "종부세", "세금", "세제",
+             "아파트", "금리", "주식", "증시", "코스피", "반도체", "기업", "성과급",
+             "물가", "경제", "재정", "예산", "임금", "고용", "투자", "분양", "청약"],
+    "사회": ["경찰", "수사", "사건", "사고", "재판", "구속", "학대", "노숙",
+             "인권위", "성차별", "논란", "교육", "학교", "의료", "병원", "노동",
+             "환경", "폭염", "화재", "범죄", "판결", "시민", "복지"],
+    "국제": ["미국", "트럼프", "일본", "중국", "북한", "러시아", "우크라", "젤렌스키",
+             "외교", "정상회담", "관세", "무역", "파병", "동맹", "국제", "해외",
+             "백악관", "유엔", "태국", "베트남"],
+    "문화": ["배우", "가수", "아이돌", "영화", "드라마", "예능", "방송", "연예",
+             "스포츠", "축구", "야구", "선수", "감독", "월드컵", "공연", "K팝"],
+}
+
+
+def guess_category(text):
+    """주제 텍스트에서 카테고리를 추정한다 (LLM 없을 때의 기본값)."""
+    scores = {c: 0 for c in CATEGORIES}
+    for cat, hints in CATEGORY_HINTS.items():
+        for h in hints:
+            if h in text:
+                scores[cat] += 1
+    best = max(scores.items(), key=lambda x: x[1])
+    return best[0] if best[1] > 0 else "사회"
+
+
 def topic_phrases(articles, members, seed):
     """주제 멤버 기사들에서 구(bigram) 단위 핵심 키워드를 뽑는다."""
     uni, bi = {}, {}
@@ -250,7 +281,7 @@ def build_topics(articles, prev_topics):
             merged.append(t)
     topics = sorted(merged, key=lambda t: -t["comments"])[:TOPIC_COUNT]
 
-    # 라벨/키워드 구성
+    # 라벨/키워드/카테고리 구성
     for t in topics:
         members = sorted(t["articles"], key=lambda i: -articles[i]["comments"])
         phrases = topic_phrases(articles, members, t["seed"])
@@ -258,6 +289,8 @@ def build_topics(articles, prev_topics):
         t["keywords"] = [t["seed"]] + phrases[:10]
         t["articles"] = members
         t["articleCount"] = len(members)
+        t["category"] = guess_category(
+            " ".join(articles[i]["title"] for i in members[:6]) + " " + " ".join(t["keywords"]))
         del t["seed"]
 
     # 전일 대비 배지: 신규 탐지 / 포착(급등)
@@ -332,9 +365,11 @@ ENRICH_SCHEMA = {
                 "properties": {
                     "rank": {"type": "integer"},
                     "name": {"type": "string"},
+                    "category": {"type": "string",
+                                 "enum": ["정치", "경제", "사회", "국제", "문화"]},
                     "keywords": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["rank", "name", "keywords"],
+                "required": ["rank", "name", "category", "keywords"],
                 "additionalProperties": False,
             },
         },
@@ -350,7 +385,15 @@ ENRICH_PROMPT = """당신은 국회의원실 보좌진을 위한 여론 브리�
 
 1. name: 맥락이 한눈에 잡히는 주제명 (예: "캄보디아 관련 사건/사고", "부동산 공급 대책", "이재명 대통령 지지율/정국").
    같은 인물·사안이 여러 주제로 쪼개져 있으면 이름으로 구분되게 하되, 원래 rank는 유지하세요.
-2. keywords: 그 주제의 핵심 쟁점을 담은 구(phrase) 단위 키워드 8~14개
+2. category: 정치 / 경제 / 사회 / 국제 / 문화 중 하나.
+   - 정치: 대통령·국회·정당·선거·검찰개혁 등 국내 정치 권력 관련
+   - 경제: 부동산·세제·금융·기업·산업·물가·고용
+   - 사회: 사건사고·수사·재판·인권·교육·의료·노동·젠더
+   - 국제: 외교·안보·해외 동향·한미/한일/한중/남북 관계
+   - 문화: 연예·스포츠·방송·공연
+   경계가 애매하면 그 주제에 대한 여론의 관심이 어디에 쏠려 있는지를 기준으로 고르세요
+   (예: 부동산 정책을 둘러싼 여야 공방이 핵심이면 정치, 정책 내용·시장 영향이 핵심이면 경제).
+3. keywords: 그 주제의 핵심 쟁점을 담은 구(phrase) 단위 키워드 8~14개
    (예: "한국인 납치·사망", "피싱조직", "대사관 신고 무용지물"). 기사 제목에 실제로 근거한 내용만.
 
 그리고 briefing: 오늘 여론 지형을 요약하는 4~6문장. 첫 문장은 가장 큰 이슈와 그 함의,
@@ -414,6 +457,8 @@ def enrich_with_llm(payload):
             t["label"] = e["name"]
             if e.get("keywords"):
                 t["keywords"] = e["keywords"][:14]
+            if e.get("category") in CATEGORIES:
+                t["category"] = e["category"]
     if data.get("briefing"):
         payload["briefing"] = data["briefing"]
     payload["enriched"] = True

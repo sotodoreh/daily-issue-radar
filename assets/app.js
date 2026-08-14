@@ -44,10 +44,7 @@
     sel.innerHTML = state.dates
       .slice()
       .reverse()
-      .map((d) => {
-        const dd = state.dates.indexOf(d) >= 0 ? d : d;
-        return `<option value="${d}" ${d === state.date ? "selected" : ""}>${dateLabel(d)}</option>`;
-      })
+      .map((d) => `<option value="${d}" ${d === state.date ? "selected" : ""}>${dateLabel(d)}</option>`)
       .join("");
     const i = state.dates.indexOf(state.date);
     $("#btnPrev").disabled = i <= 0;

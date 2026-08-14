@@ -89,7 +89,7 @@
         return `<tr class="${t.rank <= 3 ? "rank-top" : ""}">
           <td><span class="rank-num">${t.rank}</span></td>
           <td><span class="topic-label">${esc(t.label)}</span>${badge}</td>
-          <td><div class="kw-chips">${t.keywords.slice(0, 6).map((k) => `<span class="kw">${esc(k)}</span>`).join("")}</div></td>
+          <td><div class="kw-chips">${t.keywords.slice(0, 10).map((k) => `<span class="kw">${esc(k)}</span>`).join("")}</div></td>
           <td class="num">${fmt(t.articleCount)}</td>
           <td class="num"><div class="cmt-bar-wrap"><div class="cmt-bar" style="width:${Math.round((t.comments / maxC) * 70)}px"></div>${fmt(t.comments)}</div></td>
           <td>${rep ? `<a class="rep-article" href="${rep.url}" target="_blank" rel="noopener" title="${esc(rep.title)}">${esc(rep.title)}</a>` : ""}</td>

@@ -23,7 +23,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install deps (LLM 요약용 — 키 없으면 없어도 무방)
+        run: pip install anthropic
+
       - name: Collect
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -n "${{ github.event.inputs.date }}" ]; then
             python scripts/collect.py --date "${{ github.event.inputs.date }}"

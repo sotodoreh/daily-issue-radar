@@ -60,6 +60,8 @@ STOPWORDS = {
     "저렇게", "어쩌다", "이런", "그런", "저런", "다시", "계속", "아직",
     "벌써", "어디", "여기", "거기", "없다", "있다", "그날", "이유", "상황",
     "모습", "사실", "요즘", "당시", "먼저", "바로", "함께", "직접",
+    "없는", "있는", "하는", "되는", "같은", "위한", "대한", "받은", "못한",
+    "않은", "많은", "모든", "새로운", "가능", "확인", "공개", "발표",
 }
 # 어절 끝 조사 제거용 (긴 것부터 시도)
 PARTICLES = [
@@ -164,9 +166,10 @@ def tokenize(title):
     title = unicodedata.normalize("NFKC", title).translate(HANJA)
     t = re.sub(r"\[[^\]]{1,12}\]", " ", title)          # [단독] [속보] 등 제거
     t = re.sub(r"[\"'‘’“”「」…]", " ", t)
-    words = re.split(r"[^\w가-힣]+", t)
+    words = re.split(r"[^\w가-힣·]+", t)                 # '5·18' 같은 표기는 유지
     tokens = []
     for w in words:
+        w = w.strip("·")
         if len(w) < 2:
             continue
         base = w
@@ -180,6 +183,29 @@ def tokenize(title):
     return tokens
 
 
+def topic_phrases(articles, members, seed):
+    """주제 멤버 기사들에서 구(bigram) 단위 핵심 키워드를 뽑는다."""
+    uni, bi = {}, {}
+    for i in members:
+        toks = tokenize(articles[i]["title"])
+        for t in set(toks):
+            uni[t] = uni.get(t, 0) + 1
+        for a, b in set(zip(toks, toks[1:])):
+            bi[(a, b)] = bi.get((a, b), 0) + 1
+    phrases = []
+    used = set()
+    # 2개 이상 기사에서 반복된 bigram을 구로 채택
+    for (a, b), c in sorted(bi.items(), key=lambda x: -x[1]):
+        if c >= 2 and a != seed and b != seed:
+            phrases.append(f"{a} {b}")
+            used.update((a, b))
+    # 나머지는 빈도 높은 단독 키워드로 보충
+    for t, c in sorted(uni.items(), key=lambda x: -x[1]):
+        if c >= 2 and t != seed and t not in used:
+            phrases.append(t)
+    return phrases
+
+
 def build_topics(articles, prev_topics):
     """댓글수 기반 탐욕적 키워드 클러스터링으로 주제 TOP N을 만든다."""
     kw_map = {}  # keyword -> set(article idx)
@@ -190,7 +216,7 @@ def build_topics(articles, prev_topics):
 
     assigned = set()
     topics = []
-    while len(topics) < TOPIC_COUNT:
+    while len(topics) < TOPIC_COUNT + 4:      # 병합 대비 여유분 추출
         best_kw, best_score, best_set = None, 0, None
         for kw, idxs in kw_map.items():
             live = idxs - assigned
@@ -201,25 +227,38 @@ def build_topics(articles, prev_topics):
                 best_kw, best_score, best_set = kw, score, live
         if not best_kw:
             break
-        # 시드 키워드와 함께 등장한 연관 키워드 수집
-        related = {}
-        for kw, idxs in kw_map.items():
-            if kw == best_kw:
-                continue
-            inter = len(idxs & best_set)
-            if inter >= max(2, len(best_set) * 0.3):
-                related[kw] = inter
-        rel_sorted = [k for k, _ in sorted(related.items(), key=lambda x: -x[1])][:8]
-        members = sorted(best_set, key=lambda i: -articles[i]["comments"])
-        topic = {
-            "label": best_kw,
-            "keywords": [best_kw] + rel_sorted,
-            "articles": members,
-            "articleCount": len(members),
+        topics.append({
+            "seed": best_kw,
+            "articles": set(best_set),
             "comments": best_score,
-        }
-        topics.append(topic)
+        })
         assigned |= best_set
+
+    # 유사 주제 병합: 시드가 서로 포함 관계('대통령'/'이대통령')면 하나로 합침
+    merged = []
+    for t in topics:
+        target = None
+        for m in merged:
+            a, b = t["seed"], m["seed"]
+            if len(a) >= 3 and len(b) >= 3 and (a in b or b in a):
+                target = m
+                break
+        if target:
+            target["articles"] |= t["articles"]
+            target["comments"] += t["comments"]
+        else:
+            merged.append(t)
+    topics = sorted(merged, key=lambda t: -t["comments"])[:TOPIC_COUNT]
+
+    # 라벨/키워드 구성
+    for t in topics:
+        members = sorted(t["articles"], key=lambda i: -articles[i]["comments"])
+        phrases = topic_phrases(articles, members, t["seed"])
+        t["label"] = " · ".join([t["seed"]] + [p for p in phrases if " " not in p][:2])
+        t["keywords"] = [t["seed"]] + phrases[:10]
+        t["articles"] = members
+        t["articleCount"] = len(members)
+        del t["seed"]
 
     # 전일 대비 배지: 신규 탐지 / 포착(급등)
     prev_kw = []
@@ -279,6 +318,107 @@ def build_briefing(topics, articles, demo_articles):
         f"집계 대상 기사 {len(articles)}건의 총 댓글은 {total_c:,}개입니다."
     )
     return lines
+
+
+# ---------------------------------------------------------------- LLM 요약 (선택)
+
+ENRICH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topics": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "rank": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "keywords": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["rank", "name", "keywords"],
+                "additionalProperties": False,
+            },
+        },
+        "briefing": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["topics", "briefing"],
+    "additionalProperties": False,
+}
+
+ENRICH_PROMPT = """당신은 국회의원실 보좌진을 위한 여론 브리핑 분석가입니다.
+아래는 {date} 하루 동안 네이버 뉴스에서 여론(댓글)이 집중된 기사들을 키워드 기준으로 묶은 것입니다.
+기사 제목들을 읽고 실제 내용과 맥락을 파악해, 각 주제에 대해 다음을 작성하세요.
+
+1. name: 맥락이 한눈에 잡히는 주제명 (예: "캄보디아 관련 사건/사고", "부동산 공급 대책", "이재명 대통령 지지율/정국").
+   같은 인물·사안이 여러 주제로 쪼개져 있으면 이름으로 구분되게 하되, 원래 rank는 유지하세요.
+2. keywords: 그 주제의 핵심 쟁점을 담은 구(phrase) 단위 키워드 8~14개
+   (예: "한국인 납치·사망", "피싱조직", "대사관 신고 무용지물"). 기사 제목에 실제로 근거한 내용만.
+
+그리고 briefing: 오늘 여론 지형을 요약하는 4~6문장. 첫 문장은 가장 큰 이슈와 그 함의,
+이후 상위권 이슈 흐름, 세대·성별 반응 특징(자료가 있으면) 순으로. 담백한 보고서 문체(~습니다체).
+
+집계 자료:
+{digest}
+"""
+
+
+def enrich_with_llm(payload):
+    """ANTHROPIC_API_KEY가 설정돼 있으면 Claude로 주제명·키워드·브리핑을 의미 단위로 재작성한다."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return False
+    try:
+        import anthropic
+    except ImportError:
+        log("anthropic SDK 미설치 — LLM 요약 건너뜀 (pip install anthropic)")
+        return False
+
+    lines = []
+    for t in payload["topics"]:
+        lines.append(f"\n[주제 {t['rank']}] 키워드: {', '.join(t['keywords'][:8])} "
+                     f"(기사 {t['articleCount']}건, 댓글 {t['comments']:,}개)")
+        for a in t["topArticles"]:
+            lines.append(f"  - {a['title']} ({a['press']}, 댓글 {a['comments']:,})")
+    lines.append("\n[댓글 TOP 10]")
+    for a in payload["commentTop"]:
+        demo = ""
+        if a.get("male") is not None:
+            top_age = max(a.get("ages", {}).items(), key=lambda x: x[1], default=None)
+            demo = f" / 남 {a['male']}%·여 {a['female']}%" + (
+                f", 최다 {top_age[0]}대 {top_age[1]}%" if top_age else "")
+        lines.append(f"  - {a['title']} ({a['press']}, 댓글 {a['comments']:,}{demo})")
+
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-opus-5",
+            max_tokens=8000,
+            output_config={"format": {"type": "json_schema", "schema": ENRICH_SCHEMA}},
+            messages=[{
+                "role": "user",
+                "content": ENRICH_PROMPT.format(
+                    date=payload["date"], digest="\n".join(lines)),
+            }],
+        )
+        if response.stop_reason == "refusal":
+            log("LLM 요약 거절됨 — 휴리스틱 결과 유지")
+            return False
+        text = next(b.text for b in response.content if b.type == "text")
+        data = json.loads(text)
+    except Exception as e:
+        log("LLM 요약 실패 — 휴리스틱 결과 유지:", repr(e))
+        return False
+
+    by_rank = {t["rank"]: t for t in data.get("topics", [])}
+    for t in payload["topics"]:
+        e = by_rank.get(t["rank"])
+        if e and e.get("name"):
+            t["label"] = e["name"]
+            if e.get("keywords"):
+                t["keywords"] = e["keywords"][:14]
+    if data.get("briefing"):
+        payload["briefing"] = data["briefing"]
+    payload["enriched"] = True
+    log("LLM 요약 적용 완료")
+    return True
 
 
 # ---------------------------------------------------------------- 메인
@@ -395,6 +535,9 @@ def main():
             "minCommentsForDemo": MIN_COMMENTS_FOR_DEMO,
         },
     }
+
+    # 8) LLM 의미 분석 (API 키 있을 때만; 실패해도 휴리스틱 결과로 진행)
+    enrich_with_llm(payload)
 
     os.makedirs(DATA_DIR, exist_ok=True)
     out_path = os.path.join(DATA_DIR, diso + ".json")

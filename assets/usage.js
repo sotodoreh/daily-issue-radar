@@ -131,5 +131,9 @@
     });
 
     if (location.hash === "#usage") openPanel();
+    // 이미 열린 페이지에서 주소에 #usage 를 붙여도 열리도록
+    window.addEventListener("hashchange", function () {
+      if (location.hash === "#usage") openPanel();
+    });
   });
 })();

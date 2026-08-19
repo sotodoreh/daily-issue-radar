@@ -6,7 +6,7 @@
 
   // Cloudflare Worker 배포 후 그 주소를 여기에 넣으세요 (끝에 / 없이)
   // 예: "https://issue-radar-stats.내계정.workers.dev"
-  var STATS_API = "";
+  var STATS_API = "https://issue-radar-stats.sotodoreh.workers.dev";
 
   var $ = function (s) { return document.querySelector(s); };
   var fmt = function (n) { return Number(n || 0).toLocaleString("ko-KR"); };

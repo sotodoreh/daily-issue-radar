@@ -302,11 +302,21 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* ---------- 사용 현황 (비공개) ---------- */
-.usage-link {
-  margin-left: 8px; padding: 0 6px; color: var(--border);
-  text-decoration: none; font-weight: 700; cursor: pointer;
+.usage-logo {
+  border: none; background: none; padding: 0; margin-left: 9px;
+  vertical-align: -4px; line-height: 0; opacity: .55; transition: opacity .15s, transform .15s;
 }
-.usage-link:hover { color: var(--ink-3); text-decoration: none; }
+.usage-logo:hover { opacity: 1; transform: scale(1.12); }
+.usage-logo:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 50%; }
+
+/* 푸터용 작은 레이더 */
+.radar-mini {
+  position: relative; display: inline-block; width: 19px; height: 19px;
+  border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle, #1B2FA0 0%, var(--blue-deep) 75%);
+}
+.radar-mini .r2 { inset: 26%; }
+.radar-mini .radar-dot { width: 20%; height: 20%; left: 62%; top: 20%; }
 
 .usage-modal {
   position: fixed; inset: 0; z-index: 200; display: none;

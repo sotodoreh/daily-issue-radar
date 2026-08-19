@@ -52,6 +52,7 @@
     $("#usageModal").classList.remove("show");
     $("#usageErr").textContent = "";
     $("#usagePw").value = "";
+    $("#usageBody").innerHTML = "";   // 닫으면 조회 결과도 지워 다시 비밀번호를 받도록
     if (location.hash === "#usage") {
       history.replaceState(null, "", location.pathname + location.search);
     }

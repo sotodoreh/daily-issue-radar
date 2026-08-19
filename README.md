@@ -33,13 +33,17 @@
 
 ```
 daily-issue-radar/
-├── index.html              # 대시보드 (정적, GitHub Pages)
+├── index.html                     # 대시보드 (정적, GitHub Pages)
 ├── assets/style.css
-├── assets/app.js
+├── assets/app.js                  # 대시보드 화면 로직
+├── assets/usage.js                # 사용량 집계 + 통계 패널
 ├── data/
-│   ├── index.json          # 날짜 목록
-│   └── YYYY-MM-DD.json     # 일자별 수집 데이터 (아카이브)
-├── scripts/collect.py      # 수집기 (Python 표준 라이브러리만 사용)
+│   ├── index.json                 # 날짜 목록
+│   └── YYYY-MM-DD.json            # 일자별 수집 데이터 (아카이브)
+├── scripts/collect.py             # 수집기 + AI 의미분석
+├── worker/stats-worker.js         # 사용량 집계 서버 (Cloudflare Worker)
+├── worker/설정방법.md              # 집계 서버 설정 안내
+├── CHANGELOG.md                   # 버전별 변경 이력
 └── .github/workflows/collect.yml  # 매일 08:10 KST 자동 수집
 ```
 
@@ -70,7 +74,7 @@ python scripts/collect.py --today          # 오늘(현재까지)
 집계 서버(Cloudflare Worker)를 붙이는 방법은 [`worker/설정방법.md`](worker/설정방법.md) 참고.
 서버를 붙이지 않아도 사이트는 정상 동작합니다(집계만 안 됨).
 
-통계는 페이지 하단 크레딧 오른쪽의 작은 점(·) 또는 주소 뒤 `#usage` 로 열며, 비밀번호가 필요합니다.
+통계는 페이지 하단 크레딧 오른쪽의 **작은 레이더 로고** 또는 주소 뒤 `#usage` 로 열며, 비밀번호가 필요합니다.
 
 ## 주의
 
